@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronDown, Download, Share2, ArrowLeft } from 'lucide-react'
 import { GlowCard } from '@/components/glow-card'
+import { EvaluationVerified } from '@/components/evaluation-verified'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
@@ -208,6 +209,23 @@ export default function ReportPage() {
               </div>
             </GlowCard>
           </motion.div>
+        </motion.div>
+
+        {/* Onchain Verification */}
+        <motion.div
+          className="mb-12"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+        >
+          <EvaluationVerified
+            consensusHash="0xc9f26e4b91a87218f8e61c61d8c02f1234a5b6c7d8e9f0a1b2c3d4e5f6a7b8c"
+            agreementPercentage={92}
+            timestamp="2 minutes ago"
+            confidence={94}
+            validatorCount={4}
+            dissentingValidators={0}
+          />
         </motion.div>
 
         {/* Detailed Feedback */}

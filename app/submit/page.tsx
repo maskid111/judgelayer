@@ -2,9 +2,11 @@
 
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Upload, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { Upload, CheckCircle2, AlertCircle, Loader2, Wallet } from 'lucide-react'
 import { GlowCard } from '@/components/glow-card'
+import { WalletButton } from '@/components/wallet-button'
 import { Button } from '@/components/ui/button'
+import { useWalletStore } from '@/lib/store'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
@@ -18,6 +20,8 @@ const formSteps = [
 export default function SubmitPage() {
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitSuccess, setSubmitSuccess] = useState(false)
+  const { isConnected, addTransaction } = useWalletStore()
   const [formData, setFormData] = useState({
     projectName: '',
     description: '',
@@ -45,11 +49,57 @@ export default function SubmitPage() {
   }
 
   const handleSubmit = async () => {
+    if (!isConnected) {
+      alert('Please connect your wallet first')
+      return
+    }
+
     setIsSubmitting(true)
-    // Simulate API call
+
+    // Create submission transaction
+    const txId = `tx_${Date.now()}`
+    addTransaction({
+      id: txId,
+      type: 'submission',
+      status: 'pending',
+      timestamp: Date.now(),
+      data: formData,
+    })
+
+    // Simulate transaction states
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+
+    // Update to confirming
+    const { updateTransaction } = useWalletStore.getState()
+    updateTransaction(txId, {
+      status: 'confirming',
+      hash: `0x${Math.random().toString(16).slice(2)}`,
+    })
+
+    // Simulate confirmation
     await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    // Update to confirmed
+    updateTransaction(txId, {
+      status: 'confirmed',
+    })
+
     setIsSubmitting(false)
-    // In a real app, redirect to dashboard or show success message
+    setSubmitSuccess(true)
+
+    // Reset after 3 seconds
+    setTimeout(() => {
+      setSubmitSuccess(false)
+      setCurrentStep(1)
+      setFormData({
+        projectName: '',
+        description: '',
+        teamSize: '',
+        repositoryUrl: '',
+        technologies: '',
+        features: '',
+      })
+    }, 3000)
   }
 
   const containerVariants = {
@@ -91,7 +141,7 @@ export default function SubmitPage() {
             </Button>
           </Link>
           <h1 className="text-2xl font-bold text-foreground">Submit Your Project</h1>
-          <div className="w-10" />
+          <WalletButton />
         </div>
       </motion.div>
 
@@ -336,23 +386,37 @@ export default function SubmitPage() {
                 Next Step
               </Button>
             ) : (
-              <Button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="px-8 gap-2 bg-purple-600 hover:bg-purple-700"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Submitting...
-                  </>
-                ) : (
-                  <>
+              <>
+                {submitSuccess ? (
+                  <Button disabled className="px-8 gap-2 bg-green-600">
                     <CheckCircle2 className="w-4 h-4" />
-                    Submit Project
-                  </>
+                    Submitted Successfully
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || !isConnected}
+                    className="px-8 gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {!isConnected ? (
+                      <>
+                        <Wallet className="w-4 h-4" />
+                        Connect Wallet First
+                      </>
+                    ) : isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Submit Project
+                      </>
+                    )}
+                  </Button>
                 )}
-              </Button>
+              </>
             )}
           </motion.div>
         </motion.div>

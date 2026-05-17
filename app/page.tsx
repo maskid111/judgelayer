@@ -114,6 +114,11 @@ export default function Home() {
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
+            <Link href="/hackathon">
+              <Button size="lg" variant="outline" className="border-cyan-500/30 hover:bg-cyan-500/10">
+                Setup Hackathon
+              </Button>
+            </Link>
             <Link href="/dashboard">
               <Button size="lg" variant="outline" className="border-purple-500/30 hover:bg-purple-500/10">
                 View Dashboard
