@@ -21,11 +21,15 @@ export interface WalletState {
   disconnect: () => void;
 }
 
-export const useWalletStore = create<WalletState>((set) => ({
-  isConnected: false,
-  address: undefined,
-  network: undefined,
-  balance: undefined,
+export const useWalletStore = create<WalletState>((set) => {
+  // Check for demo mode
+  const isDemoMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('demo');
+  
+  return {
+  isConnected: isDemoMode,
+  address: isDemoMode ? '0x742d35Cc6634C0532925a3b844Bc622e2eB17f53' : undefined,
+  network: isDemoMode ? 'testnet' : undefined,
+  balance: isDemoMode ? '5.42 ETH' : undefined,
   transactions: [],
   
   addTransaction: (tx) =>
@@ -56,7 +60,8 @@ export const useWalletStore = create<WalletState>((set) => ({
       balance: undefined,
       transactions: [],
     }),
-}));
+  }
+});
 
 export interface HackathonContext {
   id: string;

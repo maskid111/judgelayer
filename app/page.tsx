@@ -1,61 +1,24 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, Brain, Network, Zap, Shield, BarChart3, Cpu } from 'lucide-react'
+import { Zap, Shield, Network, Cpu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { GlowCard } from '@/components/glow-card'
-import { ConsensusValidator } from '@/components/consensus-validator'
+import { WalletButton } from '@/components/wallet-button'
+import { useWalletStore } from '@/lib/store'
 import Link from 'next/link'
 
-const features = [
-  {
-    icon: Brain,
-    title: 'AI-Powered Analysis',
-    description: 'Advanced machine learning models evaluate projects with deep technical understanding and creativity scoring.',
-  },
-  {
-    icon: Network,
-    title: 'Decentralized Consensus',
-    description: 'Multiple validators reach agreement through transparent consensus mechanisms, ensuring fair and unbiased evaluation.',
-  },
-  {
-    icon: Zap,
-    title: 'Real-Time Feedback',
-    description: 'Get instant feedback on your project with detailed breakdowns of strengths and areas for improvement.',
-  },
-  {
-    icon: Shield,
-    title: 'Transparent Scoring',
-    description: 'See exactly how validators evaluated your project with clear reasoning and scoring methodology.',
-  },
-  {
-    icon: BarChart3,
-    title: 'Advanced Analytics',
-    description: 'Comprehensive dashboard showing your project performance across multiple evaluation dimensions.',
-  },
-  {
-    icon: Cpu,
-    title: 'Multi-Model Validation',
-    description: 'Leverages multiple cutting-edge AI models to provide balanced and comprehensive evaluation.',
-  },
-]
-
-const demoValidators = [
-  { id: '1', name: 'Alpha', score: 92, status: 'approved' as const, confidence: 0.98 },
-  { id: '2', name: 'Beta', score: 88, status: 'approved' as const, confidence: 0.95 },
-  { id: '3', name: 'Gamma', score: 90, status: 'approved' as const, confidence: 0.96 },
-  { id: '4', name: 'Delta', score: 85, status: 'pending' as const, confidence: 0.87 },
-]
-
 export default function Home() {
+  const { isConnected } = useWalletStore()
+  const [networkStatus, setNetworkStatus] = useState('Live')
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.2,
+        staggerChildren: 0.15,
+        delayChildren: 0.3,
       },
     },
   }
@@ -65,201 +28,188 @@ export default function Home() {
     visible: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.5 },
+      transition: { duration: 0.6, ease: 'easeOut' },
+    },
+  }
+
+  const floatingVariants = {
+    animate: {
+      y: [0, -20, 0],
+      transition: { duration: 4, repeat: Infinity },
     },
   }
 
   return (
-    <main className="bg-background min-h-screen overflow-hidden">
-      {/* Animated gradient background */}
-      <div className="fixed inset-0 animated-gradient opacity-30 pointer-events-none" />
+    <main className="min-h-screen bg-background overflow-hidden">
+      {/* Animated background elements */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl opacity-20" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl opacity-20" />
+      </div>
 
-      {/* Hero Section */}
-      <section className="relative pt-20 pb-32 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      {/* Network Status Bar */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative z-10 border-b border-purple-500/20 bg-background/50 backdrop-blur-sm"
+      >
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="absolute inset-0 bg-cyan-500/30 rounded-full blur animate-pulse" />
+              <div className="relative w-2 h-2 bg-cyan-500 rounded-full" />
+            </div>
+            <span className="text-sm text-cyan-400 font-medium">GenLayer Network {networkStatus}</span>
+          </div>
+          <WalletButton />
+        </div>
+      </motion.div>
+
+      {/* Main Content */}
+      <div className="relative z-10 max-w-7xl mx-auto px-4 py-20">
+        {/* Hero Section */}
         <motion.div
-          className="text-center space-y-8"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
+          className="text-center mb-20"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
         >
-          {/* Hero Badge */}
-          <div className="flex justify-center">
-            <div className="glassmorphism rounded-full px-4 py-2 border border-purple-500/30">
-              <p className="text-sm text-purple-300 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                Powered by Distributed AI Validators
-              </p>
+          <motion.h1
+            variants={itemVariants}
+            className="text-6xl md:text-7xl font-black text-balance mb-6 bg-gradient-to-r from-purple-400 via-cyan-400 to-purple-400 bg-clip-text text-transparent"
+          >
+            JudgeLayer
+          </motion.h1>
+
+          <motion.p
+            variants={itemVariants}
+            className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8"
+          >
+            Decentralized AI evaluation protocol. Connect your wallet, submit your project, and receive transparent consensus-based evaluation from GenLayer validators.
+          </motion.p>
+
+          {/* CTA - Conditional based on wallet connection */}
+          <motion.div variants={itemVariants} className="flex gap-4 justify-center flex-wrap">
+            {isConnected ? (
+              <Link href="/evaluate">
+                <Button size="lg" className="gap-2 bg-purple-600 hover:bg-purple-700 px-8">
+                  Start Evaluation
+                  <Zap className="w-4 h-4" />
+                </Button>
+              </Link>
+            ) : (
+              <div className="text-muted-foreground">
+                <p className="mb-4">Connect your wallet to begin</p>
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+
+        {/* Mission Statement */}
+        <motion.div
+          className="mb-20 max-w-4xl mx-auto"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6, duration: 0.6 }}
+        >
+          <div className="glassmorphism p-8 rounded-xl border border-purple-500/20">
+            <h2 className="text-2xl font-bold mb-4 text-foreground">How It Works</h2>
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="text-center">
+                <div className="text-3xl font-black text-cyan-400 mb-2">1</div>
+                <p className="text-sm text-muted-foreground">
+                  Connect your Web3 wallet to verify your identity on the GenLayer network
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-black text-purple-400 mb-2">2</div>
+                <p className="text-sm text-muted-foreground">
+                  Provide hackathon context and submit your project for evaluation
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-black text-cyan-400 mb-2">3</div>
+                <p className="text-sm text-muted-foreground">
+                  Watch AI validators reach consensus and receive onchain-verified results
+                </p>
+              </div>
             </div>
           </div>
-
-          {/* Main Heading */}
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-balance leading-tight">
-            <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
-              Decentralized AI
-            </span>
-            <br />
-            <span className="text-foreground">Hackathon Evaluation</span>
-          </h1>
-
-          {/* Subheading */}
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Submit your projects and get evaluated by an ensemble of specialized AI validators. Transparent consensus scoring, real-time feedback, and detailed analytics for every submission.
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="flex gap-4 justify-center pt-4 flex-wrap">
-            <Link href="/submit">
-              <Button size="lg" className="gap-2 bg-purple-600 hover:bg-purple-700">
-                Submit Project
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <Link href="/hackathon">
-              <Button size="lg" variant="outline" className="border-cyan-500/30 hover:bg-cyan-500/10">
-                Setup Hackathon
-              </Button>
-            </Link>
-            <Link href="/dashboard">
-              <Button size="lg" variant="outline" className="border-purple-500/30 hover:bg-purple-500/10">
-                View Dashboard
-              </Button>
-            </Link>
-          </div>
         </motion.div>
 
-        {/* Demo Consensus Validator - Hero Element */}
+        {/* Protocol Features */}
         <motion.div
-          className="mt-24 max-w-4xl mx-auto"
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.3 }}
+          className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-20"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
         >
-          <ConsensusValidator
-            validators={demoValidators}
-            consensusScore={88.75}
-            projectTitle="Example: Smart Contract Auditor"
-          />
+          {[
+            {
+              icon: Cpu,
+              title: 'Multi-Model Consensus',
+              description: 'GenLayer validators reach decentralized agreement',
+            },
+            {
+              icon: Shield,
+              title: 'Transparent & Fair',
+              description: 'All scores and reasoning are publicly verifiable',
+            },
+            {
+              icon: Network,
+              title: 'Onchain Verified',
+              description: 'Results are finalized and stored on the blockchain',
+            },
+            {
+              icon: Zap,
+              title: 'Real-Time Feedback',
+              description: 'Instant detailed evaluation with AI explanations',
+            },
+          ].map((feature, i) => (
+            <motion.div
+              key={i}
+              variants={itemVariants}
+              className="glassmorphism p-6 rounded-lg border border-purple-500/20 hover:border-cyan-500/30 transition-all"
+            >
+              <feature.icon className="w-8 h-8 text-cyan-400 mb-3" />
+              <h3 className="font-bold text-foreground mb-2">{feature.title}</h3>
+              <p className="text-sm text-muted-foreground">{feature.description}</p>
+            </motion.div>
+          ))}
         </motion.div>
-      </section>
 
-      {/* Features Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 relative">
-        <div className="max-w-7xl mx-auto">
+        {/* Wallet Connection Prompt */}
+        {!isConnected && (
           <motion.div
-            className="text-center mb-16"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
+            className="max-w-2xl mx-auto mb-20"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8 }}
           >
-            <h2 className="text-4xl font-bold text-foreground mb-4">Why Choose JudgeLayer?</h2>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Built on cutting-edge AI and blockchain principles for fair, transparent project evaluation.
-            </p>
+            <div className="glassmorphism p-8 rounded-xl border border-cyan-500/30 text-center">
+              <h3 className="text-2xl font-bold text-foreground mb-4">Ready to get started?</h3>
+              <p className="text-muted-foreground mb-6">
+                Click the wallet button in the top right to connect your Web3 wallet. JudgeLayer supports MetaMask, WalletConnect, and Coinbase Wallet.
+              </p>
+              <div className="flex justify-center">
+                <WalletButton />
+              </div>
+            </div>
           </motion.div>
+        )}
 
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-            variants={containerVariants}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-          >
-            {features.map((feature, index) => {
-              const Icon = feature.icon
-              return (
-                <motion.div key={index} variants={itemVariants}>
-                  <GlowCard interactive glowColor={index % 2 === 0 ? 'purple' : 'cyan'}>
-                    <div className="flex items-start gap-4">
-                      <div className="rounded-lg p-3 bg-purple-500/10 border border-purple-500/30 flex-shrink-0">
-                        <Icon className="w-6 h-6 text-purple-400" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-foreground">{feature.title}</h3>
-                        <p className="text-sm text-muted-foreground mt-2">{feature.description}</p>
-                      </div>
-                    </div>
-                  </GlowCard>
-                </motion.div>
-              )
-            })}
-          </motion.div>
-        </div>
-      </section>
-
-      {/* How It Works Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 relative">
-        <div className="max-w-7xl mx-auto">
-          <motion.div
-            className="text-center mb-16"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-4xl font-bold text-foreground mb-4">How It Works</h2>
-            <p className="text-muted-foreground text-lg">Simple process to get your project evaluated</p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[
-              { number: '1', title: 'Submit', description: 'Upload your project details and source code' },
-              { number: '2', title: 'Validate', description: 'Multiple AI validators analyze your project' },
-              { number: '3', title: 'Consensus', description: 'Validators reach agreement on scoring' },
-              { number: '4', title: 'Report', description: 'Get detailed feedback and analytics' },
-            ].map((step, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
-              >
-                <div className="relative">
-                  <GlowCard glowColor="blue">
-                    <div className="text-center">
-                      <div className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent mb-3">
-                        {step.number}
-                      </div>
-                      <h3 className="font-semibold text-foreground mb-2">{step.title}</h3>
-                      <p className="text-sm text-muted-foreground">{step.description}</p>
-                    </div>
-                  </GlowCard>
-                  {index < 3 && (
-                    <div className="hidden md:block absolute top-1/2 -right-3 transform -translate-y-1/2">
-                      <ArrowRight className="w-6 h-6 text-purple-500/30" />
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 relative">
+        {/* Footer */}
         <motion.div
-          className="max-w-2xl mx-auto text-center"
+          className="text-center mt-20 pt-12 border-t border-purple-500/20"
           initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          transition={{ duration: 0.6 }}
-          viewport={{ once: true }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
         >
-          <GlowCard animated glowColor="purple" className="border-purple-500/40">
-            <h2 className="text-3xl font-bold text-foreground mb-4">Ready to Get Evaluated?</h2>
-            <p className="text-muted-foreground mb-6">
-              Submit your hackathon project now and get instant AI-powered feedback from multiple validators.
-            </p>
-            <Link href="/submit">
-              <Button size="lg" className="gap-2 bg-purple-600 hover:bg-purple-700 w-full sm:w-auto">
-                Submit Your Project
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-          </GlowCard>
+          <p className="text-muted-foreground text-sm">
+            Powered by GenLayer • Decentralized AI Evaluation Protocol
+          </p>
         </motion.div>
-      </section>
+      </div>
     </main>
   )
 }
