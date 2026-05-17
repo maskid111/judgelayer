@@ -46,7 +46,7 @@ export function ContextDisplay() {
         variants={itemVariants}
         className="grid md:grid-cols-2 gap-4"
       >
-        <GlowCard glow="purple" className="p-4">
+        <GlowCard glowColor="purple" className="p-4">
           <div className="flex items-center gap-3 mb-2">
             <Calendar className="w-5 h-5 text-cyan-400" />
             <h3 className="font-semibold text-white">Event Duration</h3>
@@ -58,7 +58,7 @@ export function ContextDisplay() {
         </GlowCard>
 
         {context.prizePool && (
-          <GlowCard glow="cyan" className="p-4">
+          <GlowCard glowColor="cyan" className="p-4">
             <div className="flex items-center gap-3 mb-2">
               <Trophy className="w-5 h-5 text-purple-400" />
               <h3 className="font-semibold text-white">Prize Pool</h3>

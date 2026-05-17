@@ -9,6 +9,14 @@ interface WalletModalProps {
   onClose: () => void;
 }
 
+interface BrowserWalletProvider {
+  isMetaMask?: boolean;
+  isRabby?: boolean;
+  isOkxWallet?: boolean;
+  providers?: BrowserWalletProvider[];
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+}
+
 export function WalletModal({ isOpen, onClose }: WalletModalProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   const { setWallet } = useWalletStore();
@@ -17,19 +25,36 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
 
   const handleConnect = async (walletType: string) => {
     setIsConnecting(true);
-    // Simulate wallet connection
-    await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    // Mock wallet address and balance
-    const mockAddress = `0x${Array(40)
-      .fill(0)
-      .map(() => Math.floor(Math.random() * 16).toString(16))
-      .join('')}`;
-    const mockBalance = (Math.random() * 10 + 0.5).toFixed(3);
+    try {
+      const provider = getBrowserWalletProvider();
 
-    setWallet(mockAddress, 'testnet', mockBalance);
-    setIsConnecting(false);
-    onClose();
+      if (provider) {
+        const accounts = await provider.request({ method: 'eth_requestAccounts' }) as string[];
+        const address = accounts[0];
+        const balanceHex = await provider.request({
+          method: 'eth_getBalance',
+          params: [address, 'latest'],
+        }) as string;
+        const balance = Number(BigInt(balanceHex)) / 1e18;
+
+        setWallet(address, 'testnet', balance.toFixed(4));
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        const mockAddress = `0x${Array(40)
+          .fill(0)
+          .map(() => Math.floor(Math.random() * 16).toString(16))
+          .join('')}`;
+        const mockBalance = (Math.random() * 10 + 0.5).toFixed(3);
+
+        setWallet(mockAddress, 'testnet', mockBalance);
+      }
+
+      onClose();
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   return (
@@ -81,5 +106,22 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+function getBrowserWalletProvider(): BrowserWalletProvider | undefined {
+  if (typeof window === 'undefined') return undefined;
+
+  const provider = (window as Window & { ethereum?: BrowserWalletProvider }).ethereum;
+
+  if (!provider) return undefined;
+
+  const providers = Array.isArray(provider.providers) ? provider.providers : [provider];
+
+  return (
+    providers.find((candidate) => candidate.isMetaMask) ??
+    providers.find((candidate) => candidate.isRabby) ??
+    providers.find((candidate) => candidate.isOkxWallet) ??
+    providers.find((candidate) => typeof candidate.request === 'function')
   );
 }

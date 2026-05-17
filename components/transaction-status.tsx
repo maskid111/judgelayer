@@ -115,7 +115,7 @@ export function TransactionStatus() {
 
                       {tx.status === 'failed' && (
                         <div className="mt-2 p-2 rounded bg-red-500/10 border border-red-500/30 text-red-300">
-                          Transaction failed. Please try again.
+                          {typeof tx.data.error === 'string' ? tx.data.error : 'Transaction failed. Please try again.'}
                         </div>
                       )}
 

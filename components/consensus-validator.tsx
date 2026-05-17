@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { CheckCircle2, AlertCircle, Clock } from 'lucide-react'
 
 interface ValidatorNode {
@@ -27,7 +27,7 @@ export function ConsensusValidator({
   const rejectedCount = validators.filter((v) => v.status === 'rejected').length
   const pendingCount = validators.filter((v) => v.status === 'pending').length
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -38,7 +38,7 @@ export function ConsensusValidator({
     },
   }
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, scale: 0.8 },
     visible: {
       opacity: 1,

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { Zap, Shield, Network, Cpu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { WalletButton } from '@/components/wallet-button'
@@ -12,7 +12,7 @@ export default function Home() {
   const { isConnected } = useWalletStore()
   const [networkStatus, setNetworkStatus] = useState('Live')
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -23,7 +23,7 @@ export default function Home() {
     },
   }
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, y: 20 },
     visible: {
       opacity: 1,
@@ -32,7 +32,7 @@ export default function Home() {
     },
   }
 
-  const floatingVariants = {
+  const floatingVariants: Variants = {
     animate: {
       y: [0, -20, 0],
       transition: { duration: 4, repeat: Infinity },
