@@ -56,28 +56,34 @@ export function TransactionStatus() {
                   }
                   className="w-full text-left"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      {statusIcons[tx.status]}
-                      <span className="font-semibold text-white capitalize text-sm">
-                        {tx.type.replace('_', ' ')}
-                      </span>
-                    </div>
-                    <ChevronDown
-                      className={`w-4 h-4 text-purple-400 transition-transform ${
-                        expandedId === tx.id ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </div>
+                  {tx.type === 'evaluation' && tx.status === 'confirming' ? (
+                    <EvaluationProgressSummary tx={tx} expanded={expandedId === tx.id} />
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {statusIcons[tx.status]}
+                          <span className="font-semibold text-white capitalize text-sm">
+                            {tx.type.replace('_', ' ')}
+                          </span>
+                        </div>
+                        <ChevronDown
+                          className={`w-4 h-4 text-purple-400 transition-transform ${
+                            expandedId === tx.id ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className={`text-xs font-semibold ${statusColor[tx.status]}`}>
-                      {statusLabel[tx.status]}
-                    </span>
-                    <span className="text-xs text-purple-300">
-                      {new Date(tx.timestamp).toLocaleTimeString()}
-                    </span>
-                  </div>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-semibold ${statusColor[tx.status]}`}>
+                          {statusLabel[tx.status]}
+                        </span>
+                        <span className="text-xs text-purple-300">
+                          {new Date(tx.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </button>
 
                 {/* Expanded Details */}
@@ -144,6 +150,39 @@ export function TransactionStatus() {
             </motion.div>
           ))}
         </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+function EvaluationProgressSummary({ tx, expanded }: { tx: Transaction; expanded: boolean }) {
+  const lifecycle = typeof tx.data.lifecycle === 'string' ? tx.data.lifecycle : 'Consensus forming';
+
+  return (
+    <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="relative mt-0.5 h-8 w-8 rounded-full border border-cyan-400/30 bg-cyan-400/10 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full border border-cyan-300/20 animate-ping" />
+            <Loader className="h-4 w-4 animate-spin text-cyan-300" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-white">Evaluation in progress</div>
+            <div className="mt-1 text-xs font-medium text-cyan-300">Consensus forming</div>
+          </div>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-purple-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-md border border-purple-500/20 bg-black/20 p-2">
+          <div className="text-purple-300">Typical wait</div>
+          <div className="mt-1 font-semibold text-cyan-100">2-5 min</div>
+        </div>
+        <div className="rounded-md border border-purple-500/20 bg-black/20 p-2">
+          <div className="text-purple-300">Current phase</div>
+          <div className="mt-1 font-semibold text-cyan-100">{lifecycle}</div>
+        </div>
       </div>
     </div>
   );

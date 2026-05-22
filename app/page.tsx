@@ -66,10 +66,10 @@ export default function Home() {
       </motion.div>
 
       {/* Main Content */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 py-20">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 pt-24 pb-20 md:pt-32">
         {/* Hero Section */}
         <motion.div
-          className="text-center mb-20"
+          className="text-center mb-24"
           variants={containerVariants}
           initial="hidden"
           animate="visible"

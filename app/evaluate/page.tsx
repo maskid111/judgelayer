@@ -539,10 +539,7 @@ export default function EvaluatePage() {
 
           {currentStep === 4 && (
             <motion.div key="step4" variants={fadeUp} initial="hidden" animate="visible" exit="exit" className="space-y-8">
-              <div className="text-center">
-                <h2 className="text-3xl font-bold text-foreground mb-2">GenLayer Evaluation In Flight</h2>
-                <p className="text-muted-foreground">Consensus is forming. This may take several minutes.</p>
-              </div>
+              <ActiveConsensusBanner phase={lifecyclePhase} progress={lifecyclePercent} />
               <LifecycleConsole phase={lifecyclePhase} progress={lifecyclePercent} hash={transactionHash} error={lifecycleError} />
               <ProtocolStatusPanel phase={lifecyclePhase} hash={transactionHash} projectTitle={projectData.name || 'Project Evaluation'} />
               {lifecyclePhase === 'failed' && (
@@ -651,6 +648,79 @@ function ReviewCard({ title, rows }: { title: string; rows: Array<[string, strin
         ))}
       </div>
     </GlowCard>
+  )
+}
+
+function ActiveConsensusBanner({ phase, progress }: { phase: LifecyclePhase; progress: number }) {
+  return (
+    <GlowCard className="overflow-hidden border-cyan-500/30 bg-black/25 p-0" glowColor="cyan">
+      <div className="relative">
+        <motion.div
+          className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent"
+          animate={{ x: ['-100%', '100%'] }}
+          transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <div className="grid gap-6 p-6 md:grid-cols-[1fr_280px] md:p-8">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+            <div className="relative h-24 w-24 shrink-0">
+              <motion.div
+                className="absolute inset-0 rounded-full border border-cyan-300/20"
+                animate={{ scale: [1, 1.12, 1], opacity: [0.35, 0.65, 0.35] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <motion.div
+                className="absolute inset-3 rounded-full border border-cyan-300/60 border-t-transparent"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 5, repeat: Infinity, ease: 'linear' }}
+              />
+              <div className="absolute inset-6 rounded-full border border-purple-300/30 bg-cyan-400/10 flex items-center justify-center">
+                <ShieldCheck className="h-6 w-6 text-cyan-200" />
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs uppercase tracking-[0.22em] text-cyan-300">Live protocol execution</p>
+              <h2 className="text-3xl font-black text-foreground">GenLayer consensus is evaluating your submission</h2>
+              <p className="mt-3 max-w-2xl text-muted-foreground">
+                Validators are independently executing the Intelligent Contract. This usually takes 2-5 minutes.
+              </p>
+              <div className="mt-5 flex items-center gap-2 text-sm text-cyan-100">
+                <span>{phaseCopy[phase]}</span>
+                <LoadingDots />
+              </div>
+              <div className="mt-4 h-1.5 max-w-xl overflow-hidden rounded-full bg-secondary/50">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-purple-500 via-cyan-300 to-cyan-500"
+                  animate={{ width: `${Math.max(8, progress)}%` }}
+                  transition={{ duration: 0.5 }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-purple-500/20 bg-background/55 p-5">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Estimated wait</p>
+            <p className="mt-3 text-2xl font-black text-foreground">2-5 minutes</p>
+            <p className="mt-3 text-sm text-muted-foreground">Do not refresh this page while consensus is forming.</p>
+          </div>
+        </div>
+      </div>
+    </GlowCard>
+  )
+}
+
+function LoadingDots() {
+  return (
+    <span className="inline-flex gap-1" aria-hidden="true">
+      {[0, 1, 2].map((index) => (
+        <motion.span
+          key={index}
+          className="h-1.5 w-1.5 rounded-full bg-cyan-300"
+          animate={{ opacity: [0.25, 1, 0.25] }}
+          transition={{ duration: 1.2, repeat: Infinity, delay: index * 0.18 }}
+        />
+      ))}
+    </span>
   )
 }
 

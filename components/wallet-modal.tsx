@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useWalletStore } from '@/lib/store';
 import { X, Zap } from 'lucide-react';
 
@@ -21,7 +22,7 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   const { setWallet } = useWalletStore();
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
 
   const handleConnect = async (walletType: string) => {
     setIsConnecting(true);
@@ -57,20 +58,20 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="relative w-full max-w-md mx-4 p-6 rounded-xl glassmorphism border border-purple-500/30">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+      <div className="relative z-[101] w-full max-w-md rounded-xl border border-purple-500/35 bg-black/95 p-6 shadow-2xl shadow-purple-900/30">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-1 hover:bg-purple-500/20 rounded transition-colors"
+          className="absolute right-4 top-4 rounded p-1 text-purple-200 transition-colors hover:bg-purple-500/20 hover:text-white"
           aria-label="Close"
         >
-          <X className="w-5 h-5 text-purple-300" />
+          <X className="w-5 h-5" />
         </button>
 
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-white mb-2">Connect Wallet</h2>
-          <p className="text-purple-200 text-sm">
+        <div className="mx-auto mb-7 max-w-sm pr-8 text-center sm:pr-0">
+          <h2 className="mb-3 text-2xl font-bold text-white">Connect Wallet</h2>
+          <p className="text-sm leading-6 text-purple-100">
             Connect your wallet to submit projects and participate in evaluations
           </p>
         </div>
@@ -81,7 +82,7 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
               key={wallet}
               onClick={() => handleConnect(wallet)}
               disabled={isConnecting}
-              className="w-full p-4 rounded-lg border border-purple-500/30 hover:border-purple-500/60 hover:bg-purple-500/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="relative z-[102] w-full rounded-lg border border-purple-500/40 p-4 text-left transition-all hover:border-purple-400/70 hover:bg-purple-500/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center">
@@ -98,14 +99,15 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
           ))}
         </div>
 
-        <div className="mt-6 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
-          <p className="text-xs text-cyan-200">
+        <div className="mt-6 rounded-lg border border-cyan-500/35 bg-cyan-500/10 p-3 text-center">
+          <p className="text-xs leading-5 text-cyan-100">
             Your wallet connection is secure and encrypted. We never store your
             private keys.
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
