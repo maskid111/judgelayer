@@ -24,7 +24,6 @@ import { ExecutionResult, TransactionStatus, type CalldataEncodable, type Contra
 import { type Address } from 'viem'
 import { Button } from '@/components/ui/button'
 import { GlowCard } from '@/components/glow-card'
-import { ConsensusValidator } from '@/components/consensus-validator'
 import { EvaluationVerified } from '@/components/evaluation-verified'
 import { createGenLayerStudioClient, getGenLayerChain, toGenLayerAddress, type GenLayerNetwork } from '@/lib/genlayer'
 import { useWalletStore } from '@/lib/store'
@@ -122,6 +121,8 @@ export default function EvaluatePage() {
   const { isConnected, address, addTransaction, updateTransaction } = useWalletStore()
 
   const [hackathonContext, setHackathonContext] = useState('')
+  const [hackathonContextMode, setHackathonContextMode] = useState<'text' | 'link'>('text')
+  const [hackathonLink, setHackathonLink] = useState('')
   const [extractedContext, setExtractedContext] = useState<any>(null)
   const [parsingState, setParsingState] = useState<'idle' | 'reading' | 'analyzing' | 'extracting'>('idle')
 
@@ -174,7 +175,8 @@ export default function EvaluatePage() {
   }
 
   const handleParseHackathon = async () => {
-    if (!hackathonContext.trim()) return
+    const contextSource = getHackathonContextSource(hackathonContextMode, hackathonContext, hackathonLink)
+    if (!contextSource.trim()) return
 
     setParsingState('reading')
     await sleep(650)
@@ -184,16 +186,17 @@ export default function EvaluatePage() {
     await sleep(500)
 
     setExtractedContext({
-      hackathonName: deriveHackathonName(hackathonContext),
-      rawContext: hackathonContext,
+      hackathonName: hackathonContextMode === 'link' ? 'Hackathon link source' : deriveHackathonName(contextSource),
+      rawContext: contextSource,
+      sourceType: hackathonContextMode,
       judgingCriteria: [
         { name: 'Technical execution', weight: 30 },
         { name: 'Product clarity', weight: 25 },
         { name: 'Impact potential', weight: 25 },
         { name: 'Demo completeness', weight: 20 },
       ],
-      tracks: deriveTracks(hackathonContext),
-      requirements: deriveRequirements(hackathonContext),
+      tracks: deriveTracks(contextSource),
+      requirements: deriveRequirements(contextSource),
     })
 
     setParsingState('idle')
@@ -250,7 +253,7 @@ export default function EvaluatePage() {
       }
 
       const submission = {
-        hackathon_context: hackathonContext,
+        hackathon_context: getHackathonContextSource(hackathonContextMode, hackathonContext, hackathonLink),
         project_name: projectData.name,
         project_description: projectData.description,
       }
@@ -355,7 +358,7 @@ export default function EvaluatePage() {
           lifecycle: phaseCopy.finalized,
           finality: getFinalityStatus(finalizedReceipt) ?? TransactionStatus.FINALIZED,
           execution: executionSucceeded ? 'successful' : 'failed',
-          telemetry: telemetry.available ? 'debug trace available' : 'simulated validator telemetry',
+          consensus: telemetry.available ? 'detailed trace available' : 'status verified without detailed Studio traces',
           ...(executionSucceeded ? { finalistProbability: parsed.finalistProbability ?? 'not returned' } : { error: parsed.contractError ?? getExecutionError(finalizedReceipt, telemetry.trace) }),
         },
       })
@@ -411,20 +414,60 @@ export default function EvaluatePage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-12">
+        {currentStep < 4 && (
+          <GlowCard className="mb-8 p-5 border-cyan-500/30 bg-cyan-500/10">
+            <div className="flex items-start gap-3">
+              <RadioTower className="w-5 h-5 text-cyan-300 mt-0.5" />
+              <p className="text-sm text-cyan-50">
+                GenLayer consensus evaluations can take a few minutes because validators independently execute and verify the Intelligent Contract output.
+              </p>
+            </div>
+          </GlowCard>
+        )}
         <AnimatePresence mode="wait">
           {currentStep === 1 && (
             <motion.div key="step1" variants={fadeUp} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-              <PageTitle title="Hackathon Context" subtitle="Provide the judging criteria, tracks, requirements, prize focus, and any rules the contract should use during evaluation." />
+              <PageTitle title="Hackathon Context" subtitle="GenLayer consensus evaluations can take a few minutes because validators independently execute and verify the Intelligent Contract output." />
               <GlowCard className="p-6">
-                <label className="block text-sm font-medium text-foreground mb-3">Hackathon Details</label>
-                <textarea
-                  value={hackathonContext}
-                  onChange={(event) => setHackathonContext(event.target.value)}
-                  placeholder="Paste hackathon rules, judging criteria, tracks, themes, and submission requirements..."
-                  className="w-full bg-background border border-purple-500/20 rounded-lg p-4 text-foreground placeholder-muted-foreground focus:outline-none focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/20 min-h-40 resize-none"
-                />
+                <div className="mb-5 inline-flex rounded-lg border border-purple-500/20 bg-black/30 p-1">
+                  {[
+                    { id: 'text', label: 'Paste Text' },
+                    { id: 'link', label: 'Use Link' },
+                  ].map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => setHackathonContextMode(mode.id as 'text' | 'link')}
+                      className={`px-4 py-2 text-sm rounded-md transition-colors ${hackathonContextMode === mode.id ? 'bg-cyan-500/20 text-cyan-200' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+                {hackathonContextMode === 'text' ? (
+                  <>
+                    <label className="block text-sm font-medium text-foreground mb-3">Hackathon Details</label>
+                    <textarea
+                      value={hackathonContext}
+                      onChange={(event) => setHackathonContext(event.target.value)}
+                      placeholder="Paste hackathon rules, judging criteria, tracks, themes, and submission requirements..."
+                      className="w-full bg-background border border-purple-500/20 rounded-lg p-4 text-foreground placeholder-muted-foreground focus:outline-none focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/20 min-h-40 resize-none"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <label className="block text-sm font-medium text-foreground mb-3">Hackathon Link</label>
+                    <input
+                      value={hackathonLink}
+                      onChange={(event) => setHackathonLink(event.target.value)}
+                      placeholder="https://hackathon.example.com/rules"
+                      className="w-full bg-background border border-purple-500/20 rounded-lg px-4 py-3 text-foreground placeholder-muted-foreground focus:outline-none focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/20"
+                    />
+                    <p className="mt-3 text-sm text-muted-foreground">GenLayer validators will use this link as the hackathon context source.</p>
+                  </>
+                )}
                 <div className="mt-6 flex gap-3">
-                  <Button onClick={handleParseHackathon} disabled={!hackathonContext.trim() || parsingState !== 'idle'} className="gap-2 bg-purple-600 hover:bg-purple-700">
+                  <Button onClick={handleParseHackathon} disabled={!getHackathonContextSource(hackathonContextMode, hackathonContext, hackathonLink).trim() || parsingState !== 'idle'} className="gap-2 bg-purple-600 hover:bg-purple-700">
                     {parsingState === 'idle' ? <Zap className="w-4 h-4" /> : <Loader2 className="w-4 h-4 animate-spin" />}
                     {parsingState === 'idle' ? 'Extract Context' : phaseLabel(parsingState)}
                   </Button>
@@ -498,11 +541,10 @@ export default function EvaluatePage() {
             <motion.div key="step4" variants={fadeUp} initial="hidden" animate="visible" exit="exit" className="space-y-8">
               <div className="text-center">
                 <h2 className="text-3xl font-bold text-foreground mb-2">GenLayer Evaluation In Flight</h2>
-                <p className="text-muted-foreground">The submission is moving through wallet signing, validator execution, consensus convergence, and finalization.</p>
+                <p className="text-muted-foreground">Consensus is forming. This may take several minutes.</p>
               </div>
               <LifecycleConsole phase={lifecyclePhase} progress={lifecyclePercent} hash={transactionHash} error={lifecycleError} />
-              <ConsensusValidator validators={validators} consensusScore={lifecyclePhase === 'finalized' ? 89 : lifecyclePhase === 'consensus' ? 76 : lifecyclePhase === 'validators' ? 42 : 0} projectTitle={projectData.name || 'Project Evaluation'} />
-              <ConvergencePanel phase={lifecyclePhase} />
+              <ProtocolStatusPanel phase={lifecyclePhase} hash={transactionHash} projectTitle={projectData.name || 'Project Evaluation'} />
               {lifecyclePhase === 'failed' && (
                 <div className="flex justify-center">
                   <Button onClick={() => setCurrentStep(3)} className="gap-2 bg-purple-600 hover:bg-purple-700">
@@ -544,17 +586,9 @@ export default function EvaluatePage() {
                 <h3 className="font-bold text-foreground">Onchain Verification</h3>
                 <VerificationRow label="Transaction Hash" value={evaluationResults.hash} copyable />
                 <VerificationRow label="Contract Method" value="evaluate_submission()" />
-                <VerificationRow label="Transaction Finality" value={evaluationResults.finalityStatus} />
-                <VerificationRow label="Execution Status" value={evaluationResults.executionStatus} />
-                <VerificationRow label="Validator Telemetry" value={evaluationResults.telemetryAvailable ? 'Debug trace available' : 'Simulated fallback'} />
-                <details className="rounded-lg border border-purple-500/20 bg-black/20 p-4">
-                  <summary className="cursor-pointer text-sm font-medium text-cyan-300">Raw Intelligent Contract response</summary>
-                  <pre className="mt-4 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-purple-100">{safeStringify(evaluationResults.raw)}</pre>
-                </details>
-                <details className="rounded-lg border border-purple-500/20 bg-black/20 p-4">
-                  <summary className="cursor-pointer text-sm font-medium text-cyan-300">Decoded contract payload</summary>
-                  <pre className="mt-4 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-purple-100">{safeStringify(evaluationResults.decodedPayload ?? 'No decoded execution payload was returned by Studio.')}</pre>
-                </details>
+                <VerificationRow label="Consensus Finality" value={formatFinalityStatus(evaluationResults.finalityStatus)} />
+                <VerificationRow label="Contract Execution" value={formatExecutionStatus(evaluationResults)} />
+                <AdvancedProtocolDetails result={evaluationResults} />
                 <Button variant="outline" className="w-full gap-2 border-cyan-500/30 mt-4">
                   <ExternalLink className="w-4 h-4" />
                   View on GenLayer Explorer
@@ -679,15 +713,82 @@ function ConvergencePanel({ phase }: { phase: LifecyclePhase }) {
   )
 }
 
-function ExecutionStatePanel({ result }: { result: EvaluationResults }) {
-  const states = [
-    { label: 'Transaction finalized', ok: result.finalityStatus === TransactionStatus.FINALIZED || result.finalityStatus === 'FINALIZED', detail: result.finalityStatus },
-    { label: 'Contract execution successful', ok: result.executionSucceeded, detail: result.executionStatus },
-    { label: 'Validator telemetry', ok: result.telemetryAvailable, detail: result.telemetryAvailable ? 'Debug trace available' : 'Simulated fallback' },
+function ProtocolStatusPanel({ phase, hash, projectTitle }: { phase: LifecyclePhase; hash: TransactionHash | null; projectTitle: string }) {
+  const activeIndex = getProtocolStageIndex(phase)
+  const stages = [
+    { title: 'Wallet transaction submitted', detail: hash ? `${hash.slice(0, 10)}...${hash.slice(-8)}` : 'Awaiting signed transaction' },
+    { title: 'Leader validator executes Intelligent Contract', detail: 'Leader runs the nondeterministic evaluation path' },
+    { title: 'Validators independently verify output', detail: 'Validator set checks the proposed result' },
+    { title: 'Equivalence principle check', detail: 'Outputs are compared for protocol equivalence' },
+    { title: 'Optimistic Democracy consensus', detail: 'Consensus converges unless challenged' },
+    { title: 'Finalized evaluation', detail: 'Result committed to finalized transaction state' },
   ]
 
   return (
-    <div className="grid md:grid-cols-3 gap-4">
+    <GlowCard className="p-6 md:p-8 border-cyan-500/30 bg-black/20" glowColor="cyan">
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-cyan-300 mb-2">Consensus status</p>
+            <h3 className="text-2xl md:text-3xl font-black text-foreground">{projectTitle}</h3>
+            <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
+              Detailed validator traces are unavailable in Studio, but transaction finality and contract execution are verified from the finalized transaction.
+            </p>
+          </div>
+          <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
+            {phaseCopy[phase]}
+          </div>
+        </div>
+
+        <div className="h-2 rounded-full bg-secondary/40 overflow-hidden">
+          <motion.div className="h-full bg-gradient-to-r from-purple-500 to-cyan-400" animate={{ width: `${((activeIndex + 1) / stages.length) * 100}%` }} transition={{ duration: 0.6 }} />
+        </div>
+
+        <div className="space-y-3">
+          {stages.map((stage, index) => {
+            const complete = index < activeIndex || phase === 'finalized'
+            const active = index === activeIndex && phase !== 'finalized'
+            return (
+              <div
+                key={stage.title}
+                className={`rounded-lg border p-4 ${complete ? 'border-green-400/30 bg-green-400/10' : active ? 'border-cyan-400/40 bg-cyan-400/10' : 'border-purple-500/20 bg-black/25'}`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`mt-0.5 w-7 h-7 rounded-full border flex items-center justify-center ${complete ? 'border-green-400/40 text-green-300' : active ? 'border-cyan-400/50 text-cyan-300' : 'border-muted text-muted-foreground'}`}>
+                    {complete ? <CheckCircle2 className="w-4 h-4" /> : active ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-xs">{index + 1}</span>}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-foreground text-sm">{stage.title}</h4>
+                    <p className="text-xs text-muted-foreground mt-1">{stage.detail}</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </GlowCard>
+  )
+}
+
+function getProtocolStageIndex(phase: LifecyclePhase) {
+  if (phase === 'submitted') return 0
+  if (phase === 'validators') return 2
+  if (phase === 'consensus') return 4
+  if (phase === 'finalized') return 5
+  if (phase === 'wallet') return 0
+  if (phase === 'preparing') return 0
+  return 0
+}
+
+function ExecutionStatePanel({ result }: { result: EvaluationResults }) {
+  const states = [
+    { label: 'Consensus finalized', ok: isFinalizedStatus(result.finalityStatus), detail: 'Finalized on GenLayer' },
+    { label: 'Contract execution successful', ok: result.executionSucceeded, detail: formatExecutionStatus(result) },
+  ]
+
+  return (
+    <div className="grid md:grid-cols-2 gap-4">
       {states.map((state) => (
         <GlowCard key={state.label} className={`p-5 ${state.ok ? 'border-green-500/30 bg-green-500/10' : 'border-yellow-500/30 bg-yellow-500/10'}`}>
           <div className="flex items-start gap-3">
@@ -703,22 +804,58 @@ function ExecutionStatePanel({ result }: { result: EvaluationResults }) {
   )
 }
 
-function TelemetryFallbackNotice({ result }: { result: EvaluationResults }) {
-  if (result.telemetryAvailable) return null
-
+function TelemetryFallbackNotice({ result: _result }: { result: EvaluationResults }) {
   return (
     <GlowCard className="p-5 border-cyan-500/30 bg-cyan-500/10">
       <div className="flex items-start gap-3">
         <RadioTower className="w-5 h-5 text-cyan-300 mt-0.5" />
         <div>
-          <h3 className="font-bold text-foreground">Validator telemetry fallback active</h3>
+          <h3 className="font-bold text-foreground">Consensus Verification</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Validator progress is shown as simulated lifecycle telemetry while transaction finality and execution status remain sourced from the finalized transaction.
+            Verified from finalized GenLayer execution. Detailed validator traces are unavailable in Studio.
           </p>
-          {result.telemetryError && <p className="mt-3 text-xs text-cyan-200 break-words">{result.telemetryError}</p>}
         </div>
       </div>
     </GlowCard>
+  )
+}
+
+function AdvancedProtocolDetails({ result }: { result: EvaluationResults }) {
+  const transactionInternals = {
+    transactionHash: result.hash,
+    rawFinalityStatus: result.finalityStatus,
+    rawExecutionStatus: result.executionStatus,
+    executionSucceeded: result.executionSucceeded,
+    telemetryAvailable: result.telemetryAvailable,
+    telemetryError: result.telemetryError,
+    finalizedAt: result.timestamp,
+  }
+
+  const optionalDebugData = {
+    validatorTrace: result.telemetryAvailable ? 'Detailed validator trace available.' : 'Detailed validator traces are unavailable in Studio.',
+    debugTracing: process.env.NEXT_PUBLIC_ENABLE_GENLAYER_DEBUG_TRACE === 'true' ? 'Enabled by environment flag.' : 'Disabled by environment flag.',
+    telemetryError: result.telemetryError ?? null,
+  }
+
+  return (
+    <details className="rounded-lg border border-purple-500/20 bg-black/20 p-4">
+      <summary className="cursor-pointer text-sm font-medium text-cyan-300">Advanced Protocol Details</summary>
+      <div className="mt-4 space-y-3">
+        <ProtocolDetailDisclosure title="Raw payload" value={result.raw} />
+        <ProtocolDetailDisclosure title="Decoded payload" value={result.decodedPayload ?? 'No decoded execution payload was returned by Studio.'} />
+        <ProtocolDetailDisclosure title="Transaction internals" value={transactionInternals} />
+        <ProtocolDetailDisclosure title="Optional debug data" value={optionalDebugData} />
+      </div>
+    </details>
+  )
+}
+
+function ProtocolDetailDisclosure({ title, value }: { title: string; value: unknown }) {
+  return (
+    <details className="rounded-lg border border-cyan-500/10 bg-black/25 p-3">
+      <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</summary>
+      <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-purple-100">{safeStringify(value)}</pre>
+    </details>
   )
 }
 
@@ -985,6 +1122,23 @@ function getFinalityStatus(receipt: unknown) {
   return status === undefined || status === null ? null : String(status)
 }
 
+function isFinalizedStatus(status: string | null | undefined) {
+  const normalized = String(status ?? '').trim().toUpperCase()
+
+  return normalized === 'FINALIZED' || normalized === String(TransactionStatus.FINALIZED).toUpperCase() || normalized === '7'
+}
+
+function formatFinalityStatus(status: string | null | undefined) {
+  return isFinalizedStatus(status) ? 'Finalized on GenLayer' : 'Consensus in progress'
+}
+
+function formatExecutionStatus(result: Pick<EvaluationResults, 'executionSucceeded' | 'executionStatus'>) {
+  if (result.executionSucceeded) return 'Successful contract return'
+  if (result.executionStatus) return 'Contract execution failed'
+
+  return 'Execution status unavailable'
+}
+
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message
   if (typeof error === 'string' && error.trim()) return error
@@ -1028,7 +1182,7 @@ function parseEvaluationResult(receipt: any, trace: any): ParsedEvaluation {
   if (isSuccessfulReturnPayload(record)) {
     return {
       evaluationScores: buildEvaluationScores(record),
-      finalistProbability: maybeClampScore(record.finalist_probability),
+      finalistProbability: normalizeProbability(record.finalist_probability),
       feedback: normalizeOptionalString(record.feedback),
       recommendation: normalizeOptionalString(record.feedback) ?? readableOutput ?? 'Intelligent Contract returned successfully.',
       strengths: normalizeStringList(record.strengths, []),
@@ -1059,7 +1213,7 @@ function parseEvaluationResult(receipt: any, trace: any): ParsedEvaluation {
 
   return {
     evaluationScores: buildEvaluationScores(record),
-    finalistProbability: maybeClampScore(record.finalist_probability),
+    finalistProbability: normalizeProbability(record.finalist_probability),
     feedback: normalizeOptionalString(record.feedback),
     recommendation: normalizeOptionalString(record.feedback) ?? readableOutput ?? 'Evaluation finalized by JudgeLayer consensus.',
     strengths: normalizeStringList(record.strengths, []),
@@ -1290,6 +1444,16 @@ function maybeClampScore(value: unknown) {
   return Math.max(0, Math.min(100, Math.round(numeric)))
 }
 
+function normalizeProbability(value: unknown) {
+  if (value === undefined || value === null || value === '') return null
+
+  const numeric = typeof value === 'number' ? value : Number.parseFloat(String(value))
+  if (!Number.isFinite(numeric)) return null
+
+  const percent = numeric > 0 && numeric <= 1 ? numeric * 100 : numeric
+  return Math.max(0, Math.min(100, Math.round(percent)))
+}
+
 function formatScore(value: number | null) {
   return value === null ? 'N/A' : `${value}%`
 }
@@ -1300,6 +1464,10 @@ function normalizeOptionalString(value: unknown) {
 
 function isProjectReady(project: ProjectData) {
   return Boolean(project.name.trim() && project.description.trim() && project.githubUrl.trim() && project.demoUrl.trim())
+}
+
+function getHackathonContextSource(mode: 'text' | 'link', text: string, link: string) {
+  return mode === 'link' ? link : text
 }
 
 function phaseLabel(state: 'reading' | 'analyzing' | 'extracting') {
