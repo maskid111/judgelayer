@@ -66,11 +66,13 @@ export type GenLayerDebugTraceResult =
       available: true;
       trace: Awaited<ReturnType<GenLayerStudioClient['debugTraceTransaction']>>;
       error?: undefined;
+      disabled?: false;
     }
   | {
       available: false;
       trace: null;
-      error: string;
+      error?: string;
+      disabled?: boolean;
     };
 
 const GENLAYER_CHAINS = {
@@ -259,10 +261,19 @@ export function createGenLayerStudioClient(config: GenLayerStudioConfig = {}) {
     debugTraceTransaction: (hash: TransactionHash, round?: number) => client.debugTraceTransaction({ hash, round }),
 
     safeDebugTraceTransaction: async (hash: TransactionHash, round?: number): Promise<GenLayerDebugTraceResult> => {
+      if (!isDebugTraceEnabled()) {
+        return {
+          available: false,
+          trace: null,
+          disabled: true,
+        };
+      }
+
       try {
         return {
           available: true,
           trace: await client.debugTraceTransaction({ hash, round }),
+          disabled: false,
         };
       } catch (error) {
         return {
@@ -285,6 +296,10 @@ export function toGenLayerAddress(address: string, label = 'address'): Address {
 
 function isGenLayerNetwork(network: string | undefined): network is GenLayerNetwork {
   return typeof network === 'string' && network in GENLAYER_CHAINS;
+}
+
+function isDebugTraceEnabled() {
+  return process.env.NEXT_PUBLIC_ENABLE_GENLAYER_DEBUG_TRACE === 'true';
 }
 
 function getGenLayerErrorMessage(error: unknown) {

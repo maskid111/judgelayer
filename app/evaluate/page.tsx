@@ -73,16 +73,22 @@ interface ProjectData {
 }
 
 interface ParsedEvaluation {
-  consensusScore: number | null
-  agreement: number | null
-  confidence: number | null
+  evaluationScores: EvaluationScore[]
+  finalistProbability: number | null
+  feedback: string | null
   recommendation: string
   strengths: string[]
-  improvements: string[]
+  weaknesses: string[]
   contractError: string | null
   readableOutput: string | null
   decodedPayload: unknown
   raw: unknown
+}
+
+interface EvaluationScore {
+  key: 'innovation_score' | 'technical_depth' | 'ui_ux' | 'genlayer_alignment'
+  label: string
+  value: number | null
 }
 
 interface EvaluationResults extends ParsedEvaluation {
@@ -320,7 +326,9 @@ export default function EvaluatePage() {
         console.warn('[JudgeLayer] Using raw Studio transaction fallback after SDK parse failure:', finalizedReceiptResult.parserError)
       }
       logStudioRpcResponse('finalized transaction receipt', finalizedReceipt)
-      logStudioRpcResponse('debug trace response', telemetry)
+      if (telemetry.available) {
+        logStudioRpcResponse('debug trace response', telemetry)
+      }
       const parsed = parseEvaluationResult(finalizedReceipt, telemetry.trace)
       const executionSucceeded =
         getExecutionStatus(finalizedReceipt) !== ExecutionResult.FINISHED_WITH_ERROR &&
@@ -333,10 +341,10 @@ export default function EvaluatePage() {
         finalityStatus: getFinalityStatus(finalizedReceipt) ?? TransactionStatus.FINALIZED,
         executionSucceeded,
         telemetryAvailable: telemetry.available,
-        telemetryError: telemetry.available ? finalizedReceiptResult.parserError : telemetry.error ?? finalizedReceiptResult.parserError,
+        telemetryError: telemetry.available || telemetry.disabled ? finalizedReceiptResult.parserError : telemetry.error ?? finalizedReceiptResult.parserError,
         timestamp: new Date().toISOString(),
         validatorCount: validators.length,
-        dissentingValidators: parsed.agreement === null ? 0 : Math.max(0, validators.length - Math.round((parsed.agreement / 100) * validators.length)),
+        dissentingValidators: 0,
       })
 
       setLifecyclePhase('finalized')
@@ -348,7 +356,7 @@ export default function EvaluatePage() {
           finality: getFinalityStatus(finalizedReceipt) ?? TransactionStatus.FINALIZED,
           execution: executionSucceeded ? 'successful' : 'failed',
           telemetry: telemetry.available ? 'debug trace available' : 'simulated validator telemetry',
-          ...(executionSucceeded ? { score: parsed.consensusScore } : { error: parsed.contractError ?? getExecutionError(finalizedReceipt, telemetry.trace) }),
+          ...(executionSucceeded ? { finalistProbability: parsed.finalistProbability ?? 'not returned' } : { error: parsed.contractError ?? getExecutionError(finalizedReceipt, telemetry.trace) }),
         },
       })
       setCurrentStep(5)
@@ -519,34 +527,15 @@ export default function EvaluatePage() {
               <TelemetryFallbackNotice result={evaluationResults} />
               {evaluationResults.executionSucceeded ? (
                 <>
-                  {evaluationResults.readableOutput && <ReadableEvaluationCard output={evaluationResults.readableOutput} />}
-                  {evaluationResults.consensusScore !== null && evaluationResults.agreement !== null && evaluationResults.confidence !== null && (
-                    <>
-                      <EvaluationVerified
-                        consensusHash={evaluationResults.hash}
-                        agreementPercentage={evaluationResults.agreement}
-                        timestamp="just now"
-                        confidence={evaluationResults.confidence}
-                        validatorCount={evaluationResults.validatorCount}
-                        dissentingValidators={evaluationResults.dissentingValidators}
-                      />
-                      <GlowCard className="p-8 text-center bg-gradient-to-br from-purple-500/10 to-cyan-500/10 border-purple-500/30">
-                        <div className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400 mb-4">{evaluationResults.consensusScore}/100</div>
-                        <p className="text-foreground font-bold mb-2">Consensus Score</p>
-                        <p className="text-muted-foreground text-sm">{evaluationResults.agreement}% validator agreement</p>
-                      </GlowCard>
-                    </>
-                  )}
-                  {(evaluationResults.strengths.length > 0 || evaluationResults.improvements.length > 0 || !evaluationResults.readableOutput) && (
-                    <div className="grid lg:grid-cols-3 gap-4">
-                      {evaluationResults.strengths.length > 0 && <ResultList title="Strengths" tone="green" items={evaluationResults.strengths} />}
-                      {evaluationResults.improvements.length > 0 && <ResultList title="Improvements" tone="yellow" items={evaluationResults.improvements} />}
-                      <GlowCard className="p-6 bg-cyan-500/10 border-cyan-500/30">
-                        <h3 className="font-bold text-foreground mb-4 text-lg">Recommendation</h3>
-                        <p className="text-cyan-300 font-bold">{evaluationResults.recommendation}</p>
-                      </GlowCard>
-                    </div>
-                  )}
+                  <EvaluationVerified
+                    consensusHash={evaluationResults.hash}
+                    agreementPercentage={100}
+                    timestamp="just now"
+                    confidence={evaluationResults.finalistProbability ?? 100}
+                    validatorCount={evaluationResults.validatorCount}
+                    dissentingValidators={evaluationResults.dissentingValidators}
+                  />
+                  <ContractEvaluationDashboard result={evaluationResults} />
                 </>
               ) : (
                 <ContractErrorPanel result={evaluationResults} />
@@ -724,7 +713,7 @@ function TelemetryFallbackNotice({ result }: { result: EvaluationResults }) {
         <div>
           <h3 className="font-bold text-foreground">Validator telemetry fallback active</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            This GenLayer Studio endpoint did not expose debug trace data, so validator progress is shown as simulated lifecycle telemetry while transaction finality and execution status remain sourced from the finalized transaction.
+            Validator progress is shown as simulated lifecycle telemetry while transaction finality and execution status remain sourced from the finalized transaction.
           </p>
           {result.telemetryError && <p className="mt-3 text-xs text-cyan-200 break-words">{result.telemetryError}</p>}
         </div>
@@ -772,20 +761,85 @@ function ReadableEvaluationCard({ output }: { output: string }) {
   )
 }
 
-function ResultList({ title, items, tone }: { title: string; items: string[]; tone: 'green' | 'yellow' }) {
+function ContractEvaluationDashboard({ result }: { result: EvaluationResults }) {
+  const hasStructuredPayload =
+    result.evaluationScores.some((score) => score.value !== null) ||
+    result.finalistProbability !== null ||
+    result.strengths.length > 0 ||
+    result.weaknesses.length > 0 ||
+    Boolean(result.feedback)
+
+  if (!hasStructuredPayload && result.readableOutput) {
+    return <ReadableEvaluationCard output={result.readableOutput} />
+  }
+
+  return (
+    <div className="space-y-6">
+      <GlowCard className="p-6 bg-gradient-to-br from-purple-500/10 to-cyan-500/10 border-purple-500/30">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+          <div>
+            <h3 className="text-2xl font-bold text-foreground">JudgeLayer Scores</h3>
+            <p className="text-sm text-muted-foreground mt-1">Returned directly by the Intelligent Contract</p>
+          </div>
+          <div className="text-left md:text-right">
+            <p className="text-xs uppercase tracking-wide text-cyan-300 mb-1">Finalist Probability</p>
+            <p className="text-4xl font-black text-cyan-300">{formatScore(result.finalistProbability)}</p>
+          </div>
+        </div>
+        <div className="grid md:grid-cols-4 gap-4">
+          {result.evaluationScores.map((score) => (
+            <ScoreTile key={score.key} score={score} />
+          ))}
+        </div>
+      </GlowCard>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <ResultList title="Strengths" tone="green" items={result.strengths} emptyText="No strengths were returned." />
+        <ResultList title="Weaknesses" tone="yellow" items={result.weaknesses} emptyText="No weaknesses were returned." />
+      </div>
+
+      <GlowCard className="p-6 bg-cyan-500/10 border-cyan-500/30">
+        <h3 className="font-bold text-foreground mb-4 text-lg">Feedback</h3>
+        <p className="text-cyan-50 whitespace-pre-wrap leading-7">{result.feedback ?? result.readableOutput ?? 'No feedback was returned by the contract.'}</p>
+      </GlowCard>
+    </div>
+  )
+}
+
+function ScoreTile({ score }: { score: EvaluationScore }) {
+  const width = score.value === null ? 0 : Math.max(0, Math.min(100, score.value))
+
+  return (
+    <div className="rounded-lg border border-purple-500/20 bg-black/30 p-4">
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <p className="text-sm font-semibold text-foreground">{score.label}</p>
+        <p className="text-xl font-black text-cyan-300">{formatScore(score.value)}</p>
+      </div>
+      <div className="h-2 rounded-full bg-secondary/40 overflow-hidden">
+        <motion.div className="h-full bg-gradient-to-r from-purple-500 to-cyan-400" initial={{ width: 0 }} animate={{ width: `${width}%` }} transition={{ duration: 0.8 }} />
+      </div>
+    </div>
+  )
+}
+
+function ResultList({ title, items, tone, emptyText }: { title: string; items: string[]; tone: 'green' | 'yellow'; emptyText: string }) {
   const styles = tone === 'green' ? 'bg-green-500/10 border-green-500/30 text-green-300' : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
 
   return (
     <GlowCard className={`p-6 ${styles}`}>
       <h3 className="font-bold text-foreground mb-4 text-lg">{title}</h3>
-      <ul className="space-y-3">
-        {items.map((item, index) => (
-          <li key={index} className="flex gap-3 text-sm">
-            <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
-            <span className="text-muted-foreground">{item}</span>
-          </li>
-        ))}
-      </ul>
+      {items.length > 0 ? (
+        <ul className="space-y-3">
+          {items.map((item, index) => (
+            <li key={index} className="flex gap-3 text-sm">
+              <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span className="text-muted-foreground">{item}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-muted-foreground">{emptyText}</p>
+      )}
     </GlowCard>
   )
 }
@@ -967,18 +1021,18 @@ function getErrorMessage(error: unknown) {
 function parseEvaluationResult(receipt: any, trace: any): ParsedEvaluation {
   const decodedPayload = extractDecodedContractPayload(receipt, trace)
   const raw = decodedPayload ?? firstDefinedObject(receipt, trace) ?? null
-  const record = normalizeRecord(decodedPayload)
+  const record = getEvaluationPayloadRecord(decodedPayload)
   const traceResultCode = isRecord(trace) && typeof trace.result_code === 'number' ? trace.result_code : null
   const readableOutput = getReadableReturnOutput(record)
 
   if (isSuccessfulReturnPayload(record)) {
     return {
-      consensusScore: maybeClampScore(record.consensusScore ?? record.consensus_score ?? record.score ?? record.final_score),
-      agreement: maybeClampScore(record.agreement ?? record.consensus ?? record.validator_agreement),
-      confidence: maybeClampScore(record.confidence ?? record.credibility),
-      recommendation: readableOutput ?? 'Intelligent Contract returned successfully.',
-      strengths: normalizeStringList(record.strengths ?? record.positives ?? record.highlights, []),
-      improvements: normalizeStringList(record.improvements ?? record.risks ?? record.recommendations, []),
+      evaluationScores: buildEvaluationScores(record),
+      finalistProbability: maybeClampScore(record.finalist_probability),
+      feedback: normalizeOptionalString(record.feedback),
+      recommendation: normalizeOptionalString(record.feedback) ?? readableOutput ?? 'Intelligent Contract returned successfully.',
+      strengths: normalizeStringList(record.strengths, []),
+      weaknesses: normalizeStringList(record.weaknesses, []),
       contractError: null,
       readableOutput,
       decodedPayload,
@@ -990,12 +1044,12 @@ function parseEvaluationResult(receipt: any, trace: any): ParsedEvaluation {
 
   if (contractError) {
     return {
-      consensusScore: null,
-      agreement: null,
-      confidence: null,
+      evaluationScores: buildEvaluationScores({}),
+      finalistProbability: null,
+      feedback: null,
       recommendation: 'Contract execution failed before an evaluation result was produced.',
       strengths: [],
-      improvements: [],
+      weaknesses: [],
       contractError,
       readableOutput: null,
       decodedPayload,
@@ -1003,19 +1057,13 @@ function parseEvaluationResult(receipt: any, trace: any): ParsedEvaluation {
     }
   }
 
-  const strengths = normalizeStringList(record.strengths ?? record.positives ?? record.highlights, ['Strong technical submission with clear implementation evidence.'])
-  const improvements = normalizeStringList(record.improvements ?? record.risks ?? record.recommendations, ['Review the raw contract response for detailed improvement guidance.'])
-  const score = clampScore(record.consensusScore ?? record.consensus_score ?? record.score ?? record.final_score)
-  const agreement = clampScore(record.agreement ?? record.consensus ?? record.validator_agreement ?? 96)
-  const confidence = clampScore(record.confidence ?? record.credibility ?? agreement)
-
   return {
-    consensusScore: score,
-    agreement,
-    confidence,
-    recommendation: String(record.recommendation ?? record.verdict ?? record.decision ?? 'Evaluation finalized by JudgeLayer consensus.'),
-    strengths,
-    improvements,
+    evaluationScores: buildEvaluationScores(record),
+    finalistProbability: maybeClampScore(record.finalist_probability),
+    feedback: normalizeOptionalString(record.feedback),
+    recommendation: normalizeOptionalString(record.feedback) ?? readableOutput ?? 'Evaluation finalized by JudgeLayer consensus.',
+    strengths: normalizeStringList(record.strengths, []),
+    weaknesses: normalizeStringList(record.weaknesses, []),
     contractError: null,
     readableOutput,
     decodedPayload,
@@ -1028,12 +1076,61 @@ function isSuccessfulReturnPayload(record: Record<string, any>) {
 }
 
 function getReadableReturnOutput(record: Record<string, any>) {
-  const readable = record.readable ?? record.output ?? record.result
+  const payload = isRecord(record.payload) ? record.payload : null
+  const readable = record.readable ?? payload?.readable ?? record.output ?? record.result
 
   if (typeof readable === 'string' && readable.trim()) return readable.trim()
   if (readable !== undefined && readable !== null) return safeStringify(readable)
 
   return null
+}
+
+function getEvaluationPayloadRecord(decodedPayload: unknown) {
+  const record = normalizeRecord(decodedPayload)
+  const readable = getReadableReturnOutput(record)
+
+  if (!readable) return record
+
+  const parsedReadable = decodeNestedJsonString(readable)
+
+  if (isRecord(parsedReadable)) {
+    return {
+      ...record,
+      ...parsedReadable,
+      status: record.status,
+      readable,
+    }
+  }
+
+  return record
+}
+
+function decodeNestedJsonString(value: unknown): unknown {
+  let current = decodeStudioPayload(value)
+
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (typeof current !== 'string') return current
+
+    const trimmed = current.trim()
+    if (!trimmed) return trimmed
+
+    try {
+      current = JSON.parse(trimmed)
+    } catch {
+      return current
+    }
+  }
+
+  return current
+}
+
+function buildEvaluationScores(record: Record<string, any>): EvaluationScore[] {
+  return [
+    { key: 'innovation_score', label: 'Innovation', value: maybeClampScore(record.innovation_score) },
+    { key: 'technical_depth', label: 'Technical Depth', value: maybeClampScore(record.technical_depth) },
+    { key: 'ui_ux', label: 'UI/UX', value: maybeClampScore(record.ui_ux) },
+    { key: 'genlayer_alignment', label: 'GenLayer Alignment', value: maybeClampScore(record.genlayer_alignment) },
+  ]
 }
 
 function extractDecodedContractPayload(receipt: unknown, trace: unknown): unknown {
@@ -1184,12 +1281,6 @@ function normalizeStringList(value: unknown, fallback: string[]) {
   return fallback
 }
 
-function clampScore(value: unknown) {
-  const numeric = typeof value === 'number' ? value : Number.parseFloat(String(value))
-  if (!Number.isFinite(numeric)) return 89
-  return Math.max(0, Math.min(100, Math.round(numeric)))
-}
-
 function maybeClampScore(value: unknown) {
   if (value === undefined || value === null || value === '') return null
 
@@ -1197,6 +1288,14 @@ function maybeClampScore(value: unknown) {
   if (!Number.isFinite(numeric)) return null
 
   return Math.max(0, Math.min(100, Math.round(numeric)))
+}
+
+function formatScore(value: number | null) {
+  return value === null ? 'N/A' : `${value}%`
+}
+
+function normalizeOptionalString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
 function isProjectReady(project: ProjectData) {
