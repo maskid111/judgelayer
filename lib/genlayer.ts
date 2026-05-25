@@ -21,6 +21,18 @@ export interface GenLayerStudioConfig {
   provider?: GenLayerClientConfig['provider'];
 }
 
+export interface GenLayerWalletChainConfig {
+  chainId: `0x${string}`;
+  chainName: string;
+  nativeCurrency: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  };
+  rpcUrls: string[];
+  blockExplorerUrls?: string[];
+}
+
 export interface IntelligentContractCall<TResult = CalldataEncodable> {
   address?: Address;
   functionName: string;
@@ -106,6 +118,22 @@ export function getConfiguredIntelligentContractAddress(): Address | undefined {
 
 export function getGenLayerChain(network: GenLayerNetwork = getConfiguredGenLayerNetwork()) {
   return GENLAYER_CHAINS[network];
+}
+
+export function getGenLayerWalletChainConfig(network: GenLayerNetwork = getConfiguredGenLayerNetwork()): GenLayerWalletChainConfig {
+  const chain = getGenLayerChain(network);
+  const configuredRpcUrl = process.env.NEXT_PUBLIC_GENLAYER_RPC_URL;
+  const configuredChainName = process.env.NEXT_PUBLIC_GENLAYER_CHAIN_NAME;
+  const configuredExplorerUrl = process.env.NEXT_PUBLIC_GENLAYER_EXPLORER_URL;
+  const explorerUrl = configuredExplorerUrl ?? chain.blockExplorers?.default?.url;
+
+  return {
+    chainId: `0x${chain.id.toString(16)}`,
+    chainName: configuredChainName ?? chain.name,
+    nativeCurrency: chain.nativeCurrency,
+    rpcUrls: configuredRpcUrl ? [configuredRpcUrl] : [...chain.rpcUrls.default.http],
+    blockExplorerUrls: explorerUrl ? [explorerUrl] : undefined,
+  };
 }
 
 export function createGenLayerStudioClient(config: GenLayerStudioConfig = {}) {

@@ -176,14 +176,17 @@ function EvaluationProgressSummary({ tx, expanded }: { tx: Transaction; expanded
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-md border border-purple-500/20 bg-black/20 p-2">
-          <div className="text-purple-300">Typical wait</div>
-          <div className="mt-1 font-semibold text-cyan-100">2-5 min</div>
+          <div className="text-purple-300">Timing</div>
+          <div className="mt-1 font-semibold text-cyan-100">Variable</div>
         </div>
         <div className="rounded-md border border-purple-500/20 bg-black/20 p-2">
           <div className="text-purple-300">Current phase</div>
           <div className="mt-1 font-semibold text-cyan-100">{lifecycle}</div>
         </div>
       </div>
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">
+        The app is still working even when consensus takes longer than expected.
+      </p>
     </div>
   );
 }

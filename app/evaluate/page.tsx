@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion, type Variants } from 'framer-motion'
 import {
@@ -25,14 +25,8 @@ import { type Address } from 'viem'
 import { Button } from '@/components/ui/button'
 import { GlowCard } from '@/components/glow-card'
 import { EvaluationVerified } from '@/components/evaluation-verified'
-import { createGenLayerStudioClient, getGenLayerChain, toGenLayerAddress, type GenLayerNetwork } from '@/lib/genlayer'
+import { createGenLayerStudioClient, getConfiguredGenLayerNetwork, getGenLayerWalletChainConfig, toGenLayerAddress, type GenLayerNetwork } from '@/lib/genlayer'
 import { useWalletStore } from '@/lib/store'
-
-declare global {
-  interface Window {
-    ethereum?: BrowserWalletProvider
-  }
-}
 
 interface BrowserWalletProvider {
   isMetaMask?: boolean
@@ -40,6 +34,8 @@ interface BrowserWalletProvider {
   isOkxWallet?: boolean
   name?: string
   providers?: BrowserWalletProvider[]
+  on?: (event: string, listener: (...args: any[]) => void) => void
+  removeListener?: (event: string, listener: (...args: any[]) => void) => void
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>
 }
 
@@ -63,6 +59,7 @@ const phaseCopy = {
 } as const
 
 type LifecyclePhase = keyof typeof phaseCopy
+type NetworkReadinessState = 'checking' | 'wrong' | 'switching' | 'ready' | 'unavailable'
 
 interface ProjectData {
   name: string
@@ -85,7 +82,7 @@ interface ParsedEvaluation {
 }
 
 interface EvaluationScore {
-  key: 'innovation_score' | 'technical_depth' | 'ui_ux' | 'genlayer_alignment'
+  key: 'innovation_score' | 'technical_depth' | 'ui_ux' | 'hackathon_fit'
   label: string
   value: number | null
 }
@@ -113,11 +110,15 @@ const fadeUp: Variants = {
 }
 
 export default function EvaluatePage() {
+  const [mounted, setMounted] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
+  const [networkState, setNetworkState] = useState<NetworkReadinessState>('checking')
+  const [networkMessage, setNetworkMessage] = useState('Checking wallet network...')
   const [lifecyclePhase, setLifecyclePhase] = useState<LifecyclePhase>('idle')
   const [lifecycleError, setLifecycleError] = useState<string | null>(null)
   const [transactionHash, setTransactionHash] = useState<TransactionHash | null>(null)
+  const networkSwitchInFlightRef = useRef(false)
   const { isConnected, address, addTransaction, updateTransaction } = useWalletStore()
 
   const [hackathonContext, setHackathonContext] = useState('')
@@ -138,6 +139,8 @@ export default function EvaluatePage() {
   const lifecycleIndex = Math.max(0, lifecycleOrder.indexOf(lifecyclePhase))
   const lifecycleProgress = lifecyclePhase === 'failed' ? lifecycleIndex : lifecyclePhase === 'idle' ? 0 : lifecycleIndex + 1
   const lifecyclePercent = Math.round((lifecycleProgress / lifecycleOrder.length) * 100)
+  const isNetworkReady = networkState === 'ready'
+  const submitDisabled = isLoading || !isConnected || !isNetworkReady
 
   const validators = useMemo(
     () =>
@@ -156,6 +159,99 @@ export default function EvaluatePage() {
       }),
     [lifecyclePhase]
   )
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isConnected) {
+      setNetworkState('unavailable')
+      setNetworkMessage('Connect a wallet to check the GenLayer Studio Network.')
+      return
+    }
+
+    const provider = getBrowserWalletProvider()
+
+    if (!provider) {
+      setNetworkState('unavailable')
+      setNetworkMessage('No EVM wallet provider was found.')
+      return
+    }
+
+    void prepareWalletNetwork(provider)
+
+    const handleChainChanged = () => {
+      void prepareWalletNetwork(provider)
+    }
+
+    provider.on?.('chainChanged', handleChainChanged)
+
+    return () => {
+      provider.removeListener?.('chainChanged', handleChainChanged)
+    }
+  }, [isConnected])
+
+  const prepareWalletNetwork = async (provider: BrowserWalletProvider) => {
+    if (networkSwitchInFlightRef.current) return networkState === 'ready'
+
+    const chainConfig = getGenLayerWalletChainConfig(getConfiguredGenLayerNetwork())
+    setNetworkState('checking')
+    setNetworkMessage('Checking wallet network...')
+
+    try {
+      const currentChainId = await provider.request({ method: 'eth_chainId' })
+
+      if (normalizeChainId(currentChainId) === chainConfig.chainId.toLowerCase()) {
+        setNetworkState('ready')
+        setNetworkMessage('Network ready')
+        return true
+      }
+
+      setNetworkState('wrong')
+      setNetworkMessage('Wrong network')
+      networkSwitchInFlightRef.current = true
+      setNetworkState('switching')
+      setNetworkMessage('Switching to GenLayer Studio Network...')
+      await ensureWalletNetwork(provider, getConfiguredGenLayerNetwork())
+      setNetworkState('ready')
+      setNetworkMessage('Network ready')
+      return true
+    } catch (error) {
+      setNetworkState('wrong')
+      setNetworkMessage(`Wrong network. ${getErrorMessage(error)}`)
+      return false
+    } finally {
+      networkSwitchInFlightRef.current = false
+    }
+  }
+
+  if (!mounted) {
+    return (
+      <main className="min-h-screen bg-background">
+        <div className="border-b border-purple-500/20 bg-background/70 backdrop-blur-sm sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="gap-2">
+                <ArrowLeft className="w-4 h-4" />
+                Home
+              </Button>
+            </Link>
+            <h1 className="text-xl font-bold text-foreground">JudgeLayer Evaluation</h1>
+            <div className="w-24" />
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          <GlowCard className="p-8 border-cyan-500/30 bg-cyan-500/10">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+              <p className="text-sm text-cyan-50">Preparing wallet session...</p>
+            </div>
+          </GlowCard>
+        </div>
+      </main>
+    )
+  }
 
   if (!isConnected) {
     return (
@@ -205,6 +301,12 @@ export default function EvaluatePage() {
 
   const handleSubmitProject = async () => {
     if (!projectData.name || !projectData.description || !projectData.githubUrl || !projectData.demoUrl) return
+
+    const preflightProvider = getBrowserWalletProvider()
+
+    if (!preflightProvider || !(await prepareWalletNetwork(preflightProvider))) {
+      return
+    }
 
     setIsLoading(true)
     setLifecycleError(null)
@@ -262,7 +364,14 @@ export default function EvaluatePage() {
 
       setLifecyclePhase('wallet')
       updateTransaction(txId, { status: 'pending', data: { project: projectData.name, lifecycle: phaseCopy.wallet } })
-      await ensureWalletNetwork(provider, client.network).catch((error) => {
+      setNetworkState('switching')
+      setNetworkMessage('Switching to GenLayer Studio Network...')
+      await ensureWalletNetwork(provider, client.network).then(() => {
+        setNetworkState('ready')
+        setNetworkMessage('Network ready')
+      }).catch((error) => {
+        setNetworkState('wrong')
+        setNetworkMessage(`Wrong network. ${getErrorMessage(error)}`)
         throw new Error(`Wallet network setup failed: ${getErrorMessage(error)}`)
       })
 
@@ -419,15 +528,18 @@ export default function EvaluatePage() {
             <div className="flex items-start gap-3">
               <RadioTower className="w-5 h-5 text-cyan-300 mt-0.5" />
               <p className="text-sm text-cyan-50">
-                GenLayer consensus evaluations can take a few minutes because validators independently execute and verify the Intelligent Contract output.
+                Evaluation time varies based on task complexity. Complex submissions can take several minutes while validators independently execute and verify the result.
               </p>
             </div>
           </GlowCard>
         )}
+        {currentStep < 4 && (
+          <NetworkReadinessPanel state={networkState} message={networkMessage} />
+        )}
         <AnimatePresence mode="wait">
           {currentStep === 1 && (
             <motion.div key="step1" variants={fadeUp} initial="hidden" animate="visible" exit="exit" className="space-y-6">
-              <PageTitle title="Hackathon Context" subtitle="GenLayer consensus evaluations can take a few minutes because validators independently execute and verify the Intelligent Contract output." />
+              <PageTitle title="Hackathon Context" subtitle="Evaluation time varies based on task complexity while GenLayer validators independently execute and verify the result." />
               <GlowCard className="p-6">
                 <div className="mb-5 inline-flex rounded-lg border border-purple-500/20 bg-black/30 p-1">
                   {[
@@ -529,9 +641,9 @@ export default function EvaluatePage() {
                   <ChevronRight className="w-4 h-4 rotate-180" />
                   Back
                 </Button>
-                <Button onClick={handleSubmitProject} disabled={isLoading} className="gap-2 bg-purple-600 hover:bg-purple-700">
+                <Button onClick={handleSubmitProject} disabled={submitDisabled} className="gap-2 bg-purple-600 hover:bg-purple-700">
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  Submit to JudgeLayer
+                  {networkState === 'switching' ? 'Switching Network...' : networkState !== 'ready' ? 'Network Not Ready' : 'Submit to JudgeLayer'}
                 </Button>
               </div>
             </motion.div>
@@ -651,6 +763,24 @@ function ReviewCard({ title, rows }: { title: string; rows: Array<[string, strin
   )
 }
 
+function NetworkReadinessPanel({ state, message }: { state: NetworkReadinessState; message: string }) {
+  const isReady = state === 'ready'
+  const isSwitching = state === 'switching' || state === 'checking'
+  const title = isReady ? 'Network ready' : isSwitching ? 'Switching to GenLayer Studio Network...' : 'Wrong network'
+
+  return (
+    <GlowCard className={`mb-8 p-5 ${isReady ? 'border-green-500/30 bg-green-500/10' : isSwitching ? 'border-cyan-500/30 bg-cyan-500/10' : 'border-yellow-500/30 bg-yellow-500/10'}`}>
+      <div className="flex items-start gap-3">
+        {isReady ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-300" /> : isSwitching ? <Loader2 className="mt-0.5 h-5 w-5 animate-spin text-cyan-300" /> : <AlertCircle className="mt-0.5 h-5 w-5 text-yellow-300" />}
+        <div>
+          <h3 className="font-bold text-foreground">{title}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+        </div>
+      </div>
+    </GlowCard>
+  )
+}
+
 function ActiveConsensusBanner({ phase, progress }: { phase: LifecyclePhase; progress: number }) {
   return (
     <GlowCard className="overflow-hidden border-cyan-500/30 bg-black/25 p-0" glowColor="cyan">
@@ -682,7 +812,7 @@ function ActiveConsensusBanner({ phase, progress }: { phase: LifecyclePhase; pro
               <p className="mb-2 text-xs uppercase tracking-[0.22em] text-cyan-300">Live protocol execution</p>
               <h2 className="text-3xl font-black text-foreground">GenLayer consensus is evaluating your submission</h2>
               <p className="mt-3 max-w-2xl text-muted-foreground">
-                Validators are independently executing the Intelligent Contract. This usually takes 2-5 minutes.
+                Complex submissions can take several minutes while validators independently execute and verify the result.
               </p>
               <div className="mt-5 flex items-center gap-2 text-sm text-cyan-100">
                 <span>{phaseCopy[phase]}</span>
@@ -699,9 +829,9 @@ function ActiveConsensusBanner({ phase, progress }: { phase: LifecyclePhase; pro
           </div>
 
           <div className="rounded-lg border border-purple-500/20 bg-background/55 p-5">
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Estimated wait</p>
-            <p className="mt-3 text-2xl font-black text-foreground">2-5 minutes</p>
-            <p className="mt-3 text-sm text-muted-foreground">Do not refresh this page while consensus is forming.</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Consensus timing</p>
+            <p className="mt-3 text-2xl font-black text-foreground">Variable</p>
+            <p className="mt-3 text-sm text-muted-foreground">Please keep this page open while consensus is forming. The app is still working even when consensus takes longer than expected.</p>
           </div>
         </div>
       </div>
@@ -1070,7 +1200,7 @@ function VerificationRow({ label, value, copyable = false }: { label: string; va
 function getBrowserWalletProvider(): BrowserWalletProvider | undefined {
   if (typeof window === 'undefined') return undefined
 
-  const provider = window.ethereum
+  const provider = (window as Window & { ethereum?: BrowserWalletProvider }).ethereum
 
   if (!provider) return undefined
 
@@ -1085,11 +1215,11 @@ function getBrowserWalletProvider(): BrowserWalletProvider | undefined {
 }
 
 async function ensureWalletNetwork(provider: BrowserWalletProvider, network: GenLayerNetwork) {
-  const chain = getGenLayerChain(network)
-  const targetChainId = `0x${chain.id.toString(16)}`
+  const chain = getGenLayerWalletChainConfig(network)
+  const targetChainId = chain.chainId
   const currentChainId = await provider.request({ method: 'eth_chainId' }).catch(() => undefined)
 
-  if (currentChainId === targetChainId) {
+  if (normalizeChainId(currentChainId) === targetChainId.toLowerCase()) {
     return
   }
 
@@ -1108,14 +1238,30 @@ async function ensureWalletNetwork(provider: BrowserWalletProvider, network: Gen
       params: [
         {
           chainId: targetChainId,
-          chainName: chain.name,
+          chainName: chain.chainName,
           nativeCurrency: chain.nativeCurrency,
-          rpcUrls: [...chain.rpcUrls.default.http],
-          blockExplorerUrls: chain.blockExplorers?.default?.url ? [chain.blockExplorers.default.url] : undefined,
+          rpcUrls: chain.rpcUrls,
+          blockExplorerUrls: chain.blockExplorerUrls,
         },
       ],
     })
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: targetChainId }],
+    })
   }
+}
+
+function normalizeChainId(chainId: unknown) {
+  if (typeof chainId === 'number') return `0x${chainId.toString(16)}`
+  if (typeof chainId === 'bigint') return `0x${chainId.toString(16)}`
+  if (typeof chainId !== 'string') return ''
+
+  const trimmed = chainId.trim().toLowerCase()
+  if (trimmed.startsWith('0x')) return trimmed
+
+  const numeric = Number(trimmed)
+  return Number.isFinite(numeric) ? `0x${numeric.toString(16)}` : trimmed
 }
 
 function isUnknownChainError(error: unknown) {
@@ -1349,11 +1495,13 @@ function decodeNestedJsonString(value: unknown): unknown {
 }
 
 function buildEvaluationScores(record: Record<string, any>): EvaluationScore[] {
+  const hackathonFit = record.hackathon_fit ?? record.genlayer_alignment
+
   return [
     { key: 'innovation_score', label: 'Innovation', value: maybeClampScore(record.innovation_score) },
     { key: 'technical_depth', label: 'Technical Depth', value: maybeClampScore(record.technical_depth) },
     { key: 'ui_ux', label: 'UI/UX', value: maybeClampScore(record.ui_ux) },
-    { key: 'genlayer_alignment', label: 'GenLayer Alignment', value: maybeClampScore(record.genlayer_alignment) },
+    { key: 'hackathon_fit', label: 'Hackathon Fit', value: maybeClampScore(hackathonFit) },
   ]
 }
 

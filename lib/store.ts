@@ -12,13 +12,22 @@ export interface Transaction {
 export interface WalletState {
   isConnected: boolean;
   address?: string;
-  network?: 'mainnet' | 'testnet';
+  network?: string;
   balance?: string;
   transactions: Transaction[];
   addTransaction: (tx: Transaction) => void;
   updateTransaction: (id: string, updates: Partial<Transaction>) => void;
   setWallet: (address: string, network: string, balance: string) => void;
   disconnect: () => void;
+}
+
+const WALLET_STORAGE_KEY = 'judgelayer.wallet';
+
+interface PersistedWalletState {
+  isConnected: boolean;
+  address?: string;
+  network?: string;
+  balance?: string;
 }
 
 export const useWalletStore = create<WalletState>((set) => {
@@ -44,24 +53,38 @@ export const useWalletStore = create<WalletState>((set) => {
       ),
     })),
   
-  setWallet: (address, network, balance) =>
+  setWallet: (address, network, balance) => {
+    persistWallet({ isConnected: true, address, network, balance });
     set({
       isConnected: true,
       address,
-      network: network as 'mainnet' | 'testnet',
+      network,
       balance,
-    }),
+    });
+  },
   
-  disconnect: () =>
+  disconnect: () => {
+    clearPersistedWallet();
     set({
       isConnected: false,
       address: undefined,
       network: undefined,
       balance: undefined,
       transactions: [],
-    }),
+    });
+  },
   }
 });
+
+function persistWallet(wallet: PersistedWalletState) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify(wallet));
+}
+
+function clearPersistedWallet() {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(WALLET_STORAGE_KEY);
+}
 
 export interface HackathonContext {
   id: string;
