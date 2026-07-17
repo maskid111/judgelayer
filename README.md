@@ -1,35 +1,107 @@
-# judgelayer
+# JudgeLayer
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+JudgeLayer is a GenLayer-powered hackathon evaluation app. It lets a builder submit hackathon context plus project artifacts, sends the submission to a deployed GenLayer Intelligent Contract, and renders the finalized evaluation returned by GenLayer consensus.
 
-## Built with v0
+Live app: [https://judgelayer.vercel.app/](https://judgelayer.vercel.app/)
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
+## What It Does
 
-[Continue working on v0 →](https://v0.app/chat/projects/prj_Gp4uwIvJ9bb33jWeAizMhlLeJCHn)
+- Collects hackathon context, either as pasted text or a hackathon link.
+- Collects project name, description, GitHub URL, and demo URL.
+- Connects an EVM wallet and guides the user onto the GenLayer Studio Network.
+- Calls the deployed Intelligent Contract method:
 
-## Getting Started
+```ts
+evaluate_submission(
+  hackathon_context,
+  project_name,
+  project_description,
+  github_url,
+  demo_url
+)
+```
 
-First, run the development server:
+- Tracks the transaction lifecycle through wallet signing, validator execution, consensus, and finalization.
+- Parses and displays the contract result:
+  - `innovation_score`
+  - `technical_depth`
+  - `ui_ux`
+  - `hackathon_fit`
+  - `finalist_probability`
+  - `verification`
+- Preserves wallet connection across navigation and refresh until the user disconnects.
+
+## Tech Stack
+
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS
+- Framer Motion
+- Zustand
+- `genlayer-js`
+- Vercel
+
+## GenLayer Integration
+
+The reusable GenLayer client utility lives in:
+
+```txt
+lib/genlayer.ts
+```
+
+The evaluation flow and response parsing live in:
+
+```txt
+app/evaluate/page.tsx
+```
+
+The app uses GenLayer Studio by default and supports defensive transaction waiting for longer-running Intelligent Contract executions.
+
+## Environment Variables
+
+Create a `.env.local` file with:
+
+```env
+NEXT_PUBLIC_GENLAYER_CONTRACT_ADDRESS=0x...
+NEXT_PUBLIC_GENLAYER_NETWORK=studionet
+NEXT_PUBLIC_GENLAYER_RPC_URL=
+NEXT_PUBLIC_GENLAYER_CHAIN_NAME=
+NEXT_PUBLIC_GENLAYER_EXPLORER_URL=
+NEXT_PUBLIC_ENABLE_GENLAYER_DEBUG_TRACE=false
+```
+
+Only `NEXT_PUBLIC_GENLAYER_CONTRACT_ADDRESS` is required if the default Studio network config is sufficient.
+
+## Local Development
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```txt
+http://localhost:3000
+```
 
-## Learn More
+## Build
 
-To learn more, take a look at the following resources:
+```bash
+npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+## Notes
 
-<a href="https://v0.app/chat/api/kiro/clone/maskid111/judgelayer" alt="Open in Kiro"><img src="https://pdgvvgmkdvyeydso.public.blob.vercel-storage.com/open%20in%20kiro.svg?sanitize=true" /></a>
+- The contract address is configured through environment variables.
+- The frontend does not mock evaluation results.
+- Detailed validator debug traces are optional and disabled unless `NEXT_PUBLIC_ENABLE_GENLAYER_DEBUG_TRACE=true`.
+- Contract execution, payload parsing, and final result rendering are handled client-side through the GenLayer Studio RPC flow.
