@@ -71,6 +71,7 @@ interface ProjectData {
 interface ParsedEvaluation {
   evaluationScores: EvaluationScore[]
   finalistProbability: number | null
+  verification: VerificationEvidence | null
   feedback: string | null
   recommendation: string
   strengths: string[]
@@ -85,6 +86,17 @@ interface EvaluationScore {
   key: 'innovation_score' | 'technical_depth' | 'ui_ux' | 'hackathon_fit'
   label: string
   value: number | null
+}
+
+interface VerificationEvidence {
+  github_verified: boolean | null
+  demo_verified: boolean | null
+  has_documentation: boolean | null
+  has_smart_contracts: boolean | null
+  has_source_code: boolean | null
+  implementation_evidence: boolean | null
+  innovation_evidence: boolean | null
+  uses_required_technology: boolean | null
 }
 
 interface EvaluationResults extends ParsedEvaluation {
@@ -358,6 +370,8 @@ export default function EvaluatePage() {
         hackathon_context: getHackathonContextSource(hackathonContextMode, hackathonContext, hackathonLink),
         project_name: projectData.name,
         project_description: projectData.description,
+        github_url: projectData.githubUrl,
+        demo_url: projectData.demoUrl,
       }
 
       const args = await buildEvaluateSubmissionArgs(client.getSchema, client.contractAddress, submission)
@@ -1102,6 +1116,7 @@ function ContractEvaluationDashboard({ result }: { result: EvaluationResults }) 
   const hasStructuredPayload =
     result.evaluationScores.some((score) => score.value !== null) ||
     result.finalistProbability !== null ||
+    Boolean(result.verification) ||
     result.strengths.length > 0 ||
     result.weaknesses.length > 0 ||
     Boolean(result.feedback)
@@ -1135,11 +1150,49 @@ function ContractEvaluationDashboard({ result }: { result: EvaluationResults }) 
         <ResultList title="Weaknesses" tone="yellow" items={result.weaknesses} emptyText="No weaknesses were returned." />
       </div>
 
+      {result.verification && <VerificationEvidencePanel verification={result.verification} />}
+
       <GlowCard className="p-6 bg-cyan-500/10 border-cyan-500/30">
         <h3 className="font-bold text-foreground mb-4 text-lg">Feedback</h3>
         <p className="text-cyan-50 whitespace-pre-wrap leading-7">{result.feedback ?? result.readableOutput ?? 'No feedback was returned by the contract.'}</p>
       </GlowCard>
     </div>
+  )
+}
+
+function VerificationEvidencePanel({ verification }: { verification: VerificationEvidence }) {
+  const items = [
+    ['GitHub Verified', verification.github_verified],
+    ['Demo Verified', verification.demo_verified],
+    ['Documentation', verification.has_documentation],
+    ['Smart Contracts', verification.has_smart_contracts],
+    ['Source Code', verification.has_source_code],
+    ['Implementation Evidence', verification.implementation_evidence],
+    ['Innovation Evidence', verification.innovation_evidence],
+    ['Required Technology', verification.uses_required_technology],
+  ] as const
+
+  return (
+    <GlowCard className="p-6 bg-purple-500/10 border-purple-500/30">
+      <h3 className="font-bold text-foreground mb-4 text-lg">Verification Evidence</h3>
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+        {items.map(([label, value]) => (
+          <div key={label} className="rounded-lg border border-purple-500/20 bg-black/30 p-3">
+            <div className="flex items-center gap-2">
+              {value === true ? (
+                <CheckCircle2 className="h-4 w-4 text-green-300" />
+              ) : value === false ? (
+                <AlertCircle className="h-4 w-4 text-yellow-300" />
+              ) : (
+                <Eye className="h-4 w-4 text-muted-foreground" />
+              )}
+              <span className="text-sm font-medium text-foreground">{label}</span>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">{formatVerificationValue(value)}</p>
+          </div>
+        ))}
+      </div>
+    </GlowCard>
   )
 }
 
@@ -1280,6 +1333,8 @@ async function buildEvaluateSubmissionArgs(
     String(submission.hackathon_context ?? ''),
     String(submission.project_name ?? ''),
     String(submission.project_description ?? ''),
+    String(submission.github_url ?? ''),
+    String(submission.demo_url ?? ''),
   ]
 
   try {
@@ -1290,7 +1345,7 @@ async function buildEvaluateSubmissionArgs(
       return positionalArgs
     }
 
-    if (method.params.length !== 3) {
+    if (method.params.length !== 5) {
       return positionalArgs
     }
 
@@ -1302,6 +1357,8 @@ async function buildEvaluateSubmissionArgs(
         hackathonContext: submission.hackathon_context,
         projectName: submission.project_name,
         projectDescription: submission.project_description,
+        githubUrl: submission.github_url,
+        demoUrl: submission.demo_url,
       },
       strictTypes: false,
     }) as CalldataEncodable[]
@@ -1399,6 +1456,7 @@ function parseEvaluationResult(receipt: any, trace: any): ParsedEvaluation {
     return {
       evaluationScores: buildEvaluationScores(record),
       finalistProbability: normalizeProbability(record.finalist_probability),
+      verification: normalizeVerificationEvidence(record.verification),
       feedback: normalizeOptionalString(record.feedback),
       recommendation: normalizeOptionalString(record.feedback) ?? readableOutput ?? 'Intelligent Contract returned successfully.',
       strengths: normalizeStringList(record.strengths, []),
@@ -1416,6 +1474,7 @@ function parseEvaluationResult(receipt: any, trace: any): ParsedEvaluation {
     return {
       evaluationScores: buildEvaluationScores({}),
       finalistProbability: null,
+      verification: null,
       feedback: null,
       recommendation: 'Contract execution failed before an evaluation result was produced.',
       strengths: [],
@@ -1430,6 +1489,7 @@ function parseEvaluationResult(receipt: any, trace: any): ParsedEvaluation {
   return {
     evaluationScores: buildEvaluationScores(record),
     finalistProbability: normalizeProbability(record.finalist_probability),
+    verification: normalizeVerificationEvidence(record.verification),
     feedback: normalizeOptionalString(record.feedback),
     recommendation: normalizeOptionalString(record.feedback) ?? readableOutput ?? 'Evaluation finalized by JudgeLayer consensus.',
     strengths: normalizeStringList(record.strengths, []),
@@ -1670,6 +1730,38 @@ function normalizeProbability(value: unknown) {
 
   const percent = numeric > 0 && numeric <= 1 ? numeric * 100 : numeric
   return Math.max(0, Math.min(100, Math.round(percent)))
+}
+
+function normalizeVerificationEvidence(value: unknown): VerificationEvidence | null {
+  if (!isRecord(value)) return null
+
+  return {
+    github_verified: normalizeBoolean(value.github_verified),
+    demo_verified: normalizeBoolean(value.demo_verified),
+    has_documentation: normalizeBoolean(value.has_documentation),
+    has_smart_contracts: normalizeBoolean(value.has_smart_contracts),
+    has_source_code: normalizeBoolean(value.has_source_code),
+    implementation_evidence: normalizeBoolean(value.implementation_evidence),
+    innovation_evidence: normalizeBoolean(value.innovation_evidence),
+    uses_required_technology: normalizeBoolean(value.uses_required_technology),
+  }
+}
+
+function normalizeBoolean(value: unknown) {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (normalized === 'true') return true
+    if (normalized === 'false') return false
+  }
+
+  return null
+}
+
+function formatVerificationValue(value: boolean | null) {
+  if (value === true) return 'Verified'
+  if (value === false) return 'Not verified'
+  return 'Not returned'
 }
 
 function formatScore(value: number | null) {
